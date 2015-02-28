@@ -4,9 +4,6 @@
 #include <stdlib.h>
 
 #define align 0
-#define iblock 32
-#define jblock 32
-#define kblock 32
 #define MIN(a,b) ( (a) < (b) ? (a) : (b) )
 #define MAX(a,b) ( (a) > (b) ? (a) : (b) )
 
@@ -21,7 +18,6 @@ void dstrqc(float DH,  float DT,
 			int rankx, int ranky, int s_i, int e_i, int s_j, int e_j)
 {
 	int i, j, k;
-	int ii, jj, kk;
 	int g_i;
 	int slice_1,  slice_2,  yline_1,  yline_2;
 	float dt1, dh1, dth, c1, c2;
@@ -45,15 +41,11 @@ void dstrqc(float DH,  float DT,
 	c2  = -1.0/24.0;
 
 
-	#pragma omp parallel for private(i, j, k, ii, jj, kk, g_i, f_vx1, f_vx2, xl, xm, xmu1, xmu2, xmu3, qpa, h, h1, h2, h3, vs1, vs2, vs3, a1, tmp, dcrj, vx)
-	for (i = s_i; i <= e_i; i += iblock)
-		for (j = s_j; j <= e_j; j += jblock)
-			for (k = align; k <= align+nzt-1; k += kblock)
-				for (ii = i; ii <= MIN(i+iblock, e_i); ii++)
-					for (jj = j; jj <= MIN(j+jblock, e_j); jj++)
-						#pragma ivdep
-						for (kk = k; kk <= MIN(k+kblock, nzt+align-1); kk++)
-						{
+	#pragma omp parallel for private(i, j, k, g_i, f_vx1, f_vx2, xl, xm, xmu1, xmu2, xmu3, qpa, h, h1, h2, h3, vs1, vs2, vs3, a1, tmp, dcrj, vx)
+	for (i = s_i; i <= e_i; i++)
+		for (j = s_j; j <= e_j; j++)
+			for (k = align; k <= align+nzt-1; k++)
+			{
 							register int pos;
 							register int pos_ip1, pos_ip2;
 							register int pos_im1, pos_im2;
@@ -63,7 +55,7 @@ void dstrqc(float DH,  float DT,
 							register int pos_jp1, pos_jp2;
 							register int pos_ik1, pos_jk1, pos_ij1, pos_ijk1;
 
-							pos = ii*slice_1+jj*yline_1+kk;
+							pos = i*slice_1+j*yline_1+k;
 							pos_km1 = pos-1;
 							pos_km2 = pos-2;
 							pos_kp1 = pos+1;
@@ -83,7 +75,7 @@ void dstrqc(float DH,  float DT,
 
 							f_vx1 = vx1[pos];
 							f_vx2 = vx2[pos];
-							dcrj = dcrjx[ii]*dcrjy[jj]*dcrjz[kk];
+							dcrj = dcrjx[i]*dcrjy[j]*dcrjz[k];
 
 							xl = 8.0/(lam[pos] + lam[pos_ip1] + lam[pos_jm1] + lam[pos_ij1]
 							        + lam[pos_km1] + lam[pos_ik1] + lam[pos_jk1] + lam[pos_ijk1]);
@@ -128,7 +120,7 @@ void dstrqc(float DH,  float DT,
 			                xmu3  = xmu3+DT*h3;
 			                vx    = DT*(1+f_vx2);
 
-			                if (kk == nzt+align-1)
+			                if (k == nzt+align-1)
 			                {
 			                	u1[pos_kp1] = u1[pos] - (w1[pos] - w1[pos_im1]);
 			                	v1[pos_kp1] = v1[pos] - (w1[pos_jp1] - w1[pos]);
@@ -145,13 +137,13 @@ void dstrqc(float DH,  float DT,
 			                	else
 			                		vs2 = 0.0;
 
-			                	w1[pos_kp1]	= w1[pos_km1] - lam_mu[ii*(nyt+8)+jj]*((vs1 - u1[pos_kp1])
+			                	w1[pos_kp1]	= w1[pos_km1] - lam_mu[i*(nyt+8)+j]*((vs1 - u1[pos_kp1])
 			                												   + (u1[pos_ip1] - u1[pos])
 																			   + (v1[pos_kp1] - vs2)
 																			   + (v1[pos] - v1[pos_jm1]));
 			                }
 
-			                if (kk == nzt+align-2)
+			                if (k == nzt+align-2)
 			                {
 			                	 u1[pos_kp2] = u1[pos_kp1] - (w1[pos_kp1] - w1[pos_im1+1]);
 								 v1[pos_kp2] = v1[pos_kp1] - (w1[pos_jp1+1] - w1[pos_kp1]);
@@ -221,7 +213,7 @@ void dstrqc(float DH,  float DT,
 			                			yz[pos+4] = -yz[pos];
 			                		}
 			                }
-						}
+			}
 
 	return;
 }
