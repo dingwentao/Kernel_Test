@@ -5,9 +5,9 @@
 #include <stdlib.h>
 
 #define align 0
-#define iblock 16
-#define jblock 16
-#define kblock 16
+#define iblock 1
+#define jblock 1
+#define kblock 1
 #define MIN(a,b) ( (a) < (b) ? (a) : (b) )
 #define MAX(a,b) ( (a) > (b) ? (a) : (b) )
 
@@ -20,11 +20,12 @@ void dvelcx(float DH, float DT,
 	float c1, c2;
 	float dth;
 	int   slice_1,  slice_2,  yline_1,  yline_2;
-	int i_e = MIN(i_s+iblock, nxt+3);
-	int j_e = MIN(j_s+jblock, nyt-1);
-	int k_e = MIN(k_s+kblock, nzt+align-1);
+	int i_e = MIN(i_s+iblock-1, nxt+3);
+	int j_e = MIN(j_s+jblock-1, nyt-1);
+	int k_e = MIN(k_s+kblock-1, nzt+align-1);
 	int ii, jj, kk;
 
+	printf ("flag0\n");
 	slice_1  = (nyt+8)*(nzt+2*align);
 	slice_2  = (nyt+8)*(nzt+2*align)*2;
 	yline_1  = nzt+2*align;
@@ -34,10 +35,10 @@ void dvelcx(float DH, float DT,
 	c2  = -1.0/24.0;
 	dth = DT/DH;
 
+	printf ("flag\n");
 	for (ii = i_s; ii <= i_e; ii++)
 	{
 		float dcrjx = ptr_dcrjx[ii];
-		float dcrjy = ptr_dcrjy[jj];
 		float *d1 = &ptr_d1[ii*slice_1+jj*yline_1];
 		float *u1 = &ptr_u1[ii*slice_1+jj*yline_1];
 		float *v1 = &ptr_v1[ii*slice_1+jj*yline_1];
@@ -48,7 +49,9 @@ void dvelcx(float DH, float DT,
 		float *xy = &ptr_xy[ii*slice_1+jj*yline_1];
 		float *xz = &ptr_xz[ii*slice_1+jj*yline_1];
 		float *yz = &ptr_yz[ii*slice_1+jj*yline_1];
-		for (jj = j_s; jj <= j_e; jj++)
+		for (jj = j_s; jj <= j_e; jj++, d1+=yline_1, u1+=yline_1, v1+=yline_1, w1+=yline_1, xx+=yline_1, yy+=yline_1, zz+=yline_1, xy+=yline_1, xz+=yline_1, yz+=yline_1)
+		{
+			float dcrjy = ptr_dcrjy[jj];
 			#pragma vector always
 			#pragma simd
 			for (kk = k_s; kk <= k_e; kk++)
@@ -56,6 +59,7 @@ void dvelcx(float DH, float DT,
 				register int dcrj;
 				register int d_1, d_2, d_3;
 
+				printf ("%d %d %d\n", ii, jj, kk);
 				dcrj = dcrjx * dcrjy * ptr_dcrjz[kk];
 				d_1 = 0.25*((d1[kk]+d1[kk-yline_1])+(d1[kk-1]+d1[kk-yline_1-1]));
 				d_2 = 0.25*((d1[kk]+d1[kk+slice_1])+(d1[kk-1]+d1[kk+slice_1-1]));
@@ -73,6 +77,7 @@ void dvelcx(float DH, float DT,
 											+ c1*(yz[kk]-yz[kk-yline_1]) + c2*(yz[kk+yline_1]-yz[kk-yline_2])
 											+ c1*(zz[kk+1]-zz[kk]) + c2*(zz[kk+2]-zz[kk-1]))) * dcrj;
 			}
+		}
 	}
 
 
@@ -92,11 +97,12 @@ void dvelcx_omp(float DH, float DT,
 	int *blocking;
 
 	num_i_blocks = ceil((double)nxt/iblock);
-	num_j_blocks = ceil((double)nyt/jblock);
+	num_j_blocks = ceil((double)(nyt-8)/jblock);
 	num_k_blocks = ceil((double)nzt/kblock);
 	num_blocks = num_i_blocks * num_j_blocks * num_k_blocks;
 
-//	printf ("%d %d %d %d\n", num_i_blocks, num_j_blocks, num_k_blocks, num_blocks);
+
+	printf ("%d %d %d %d\n", num_i_blocks, num_j_blocks, num_k_blocks, num_blocks);
 	blocking = (int*)malloc(3*num_blocks*sizeof(int));
 	if (blocking == NULL) printf ("Allocate blocking failed!\n");
 
@@ -108,19 +114,20 @@ void dvelcx_omp(float DH, float DT,
 				blocking[index++] = j;
 				blocking[index++] = k;
 			}
-//	printf ("%d\n", index);
+	printf ("%d\n", index);
 
 	#pragma omp parallel for schedule(dynamic) firstprivate (nxt, nyt, nzt, num_blocks) shared (DH, DT, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, blocking)
 	for (i = 0; i < num_blocks; i++)
 	{
 		int i_s = blocking[3*i];
 		int j_s = blocking[3*i+1];
-		int k_s = blocking[3*i+2];
-//		printf ("%d %d %d %d\n", omp_get_thread_num(), i_s, j_s, k_s);
+		int k_s = blocking[3*i+2];	
+		printf ("%d %d %d\n", i_s, j_s, k_s);
 		dvelcx(DT, DH, nxt, nyt, nzt, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, i_s, j_s, k_s);
 	}
 
 	free(blocking);
+	return;
 }
 
 void dvelcx_omp_2(float DH, float DT,
@@ -144,12 +151,12 @@ void dvelcx_omp_2(float DH, float DT,
 	c2  = -1.0/24.0;
 	dth = DT/DH;
 
-	#pragma omp parallel for private (i, j, k, ii, jj, kk, dcrj, d_1, d_2, d_3)
+	#pragma omp parallel for private (i, j, k)
 	for (i = 4; i <= nxt+3; i++)
 		for (j = 8; j <= nyt-1; j++)
 			for (k = align; k <= nzt+align-1; k++)
 			{
-						register dcrj, d_1, d_2, d_3;
+						register int dcrj, d_1, d_2, d_3;
 						register int pos;
 						register int pos_ip1, pos_ip2;
 						register int pos_im1, pos_im2;
@@ -176,7 +183,7 @@ void dvelcx_omp_2(float DH, float DT,
 						pos_ik1 = pos+slice_1-1;
 						pos_ij1 = pos+slice_1-yline_1;
 
-						dcrj = dcrjx[ii]*dcrjy[jj]*dcrjz[kk];
+						dcrj = dcrjx[i]*dcrjy[j]*dcrjz[k];
 
 						d_1 = 0.25*((d1[pos]+d1[pos_jm1])+(d1[pos_km1]+d1[pos_jk1]));
 						d_2 = 0.25*((d1[pos]+d1[pos_ip1])+(d1[pos_km1]+d1[pos_ik1]));
@@ -198,16 +205,18 @@ void dvelcx_omp_2(float DH, float DT,
 	return;
 }
 
-void verification(float *p1, float *p2)
+void verification(int nxt, int nyt, int nzt, float *p1, float *p2)
 {
 	int i, j, k;
 	float diff = 0.0;
+	int pos;
 	for (i = 4; i <= nxt+3; i++)
 		for (j = 8; j <= nyt-1; j++)
 			for (k = align; k <= nzt+align-1; k++)
 			{
 				pos = i*(nyt+8)*(nzt+2*align) + j*(nzt+2*align) + k;
-				diff += (p1[pos]-p2[pos])*(p1[pos]*p2[pos]);
+				diff += (p1[pos]-p2[pos])*(p1[pos]-p2[pos]);
+				printf ("%f %f\n", p1[pos], p2[pos]);
 			}
 	printf ("%f\n", diff);
 }
@@ -215,11 +224,11 @@ int main()
 {
 	int nxt, nyt, nzt;
 	int i, j, k;
-	float *u1, *v1, *w1, *xx, *yy, *zz, *xy, *xz, *yz, *d1, *dcrjx, *dcrjy, *dcrjz;
+	float *u1, *v1, *w1, *u2, *v2, *w2, *xx, *yy, *zz, *xy, *xz, *yz, *d1, *dcrjx, *dcrjy, *dcrjz;
 
-	nxt = 32;
-	nyt = 32;
-	nzt = 32;
+	nxt = 2;
+	nyt = 10;
+	nzt = 2;
 
 	u1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
 	v1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
@@ -258,9 +267,26 @@ int main()
 	if (dcrjy == NULL) printf ("Allocate dcrjy failed!\n");
 	if (dcrjz == NULL) printf ("Allocate dcrjz failed!\n");
 
+	for (i = 0; i < nxt+8; i++) dcrjx[i] = i;
+	for (j = 0; j < nyt+8; j++) dcrjy[j] = j;
+	for (k = align; k < nzt+align; k++) dcrjz[k] = k;
+
+	for (i = 0; i < nxt+8; i++)
+	  for (j = 0; j < nyt+8; j++)
+		for (k = align; k < nzt+align; k++)
+		{
+			int pos = i*(nyt+8)*(nzt+2*align) + j*(nzt+2*align) + k;
+			d1[pos] = pos;
+			xx[pos] = pos;
+			yy[pos] = pos;
+			zz[pos] = pos;
+			xy[pos] = pos;
+			xz[pos] = pos;
+			yz[pos] = pos;
+		}
 
 	struct timespec s1, e1, s2, e2;
-	double t1;
+	double t1, t2;
 
 	clock_gettime(CLOCK_REALTIME, &s1);
 	dvelcx_omp(1.0, 1.0, nxt, nyt, nzt, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1);
@@ -274,13 +300,13 @@ int main()
 	dvelcx_omp_2(1.0, 1.0, nxt, nyt, nzt, u2, v2, w2, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1);
 	clock_gettime(CLOCK_REALTIME, &e2);
 
-	t1 = (e2.tv_sec - s2.tv_sec);
-	t1 += (e2.tv_nsec - s2.tv_nsec) / 1000000000.0;
+	t2 = (e2.tv_sec - s2.tv_sec);
+	t2 += (e2.tv_nsec - s2.tv_nsec) / 1000000000.0;
 	printf ("%f\n", t2);
 
-	verification(u1, u2);
-	verification(v1, v2);
-	verification(w1, w2);
+	verification(nxt, nyt, nzt, u1, u2);
+	verification(nxt, nyt, nzt, v1, v2);
+	verification(nxt, nyt, nzt, w1, w2);
 
 	return 0;
 }
