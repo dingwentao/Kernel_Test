@@ -15,9 +15,8 @@ void dvelcx(float DH, float DT,
 			int nxt, int nyt, int nzt,
 			float* u1, float* v1, float* w1,
 			float* xx, float* yy, float* zz, float* xy, float* xz, float* yz,
-            float* dcrjx, float* dcrjy, float* dcrjz, float *d1)
+			float* dcrjx, float* dcrjy, float* dcrjz, float* d1, int i_s, int j_s, int k_s)
 {
-	int i, j, k;
 	float c1, c2;
 	float dth, dcrj;
 	float d_1, d_2, d_3;
@@ -32,15 +31,26 @@ void dvelcx(float DH, float DT,
 	c2  = -1.0/24.0;
 	dth = DT/DH;
 
+	return;
+}
 
+void dvelcx_omp(float DH, float DT,
+			int nxt, int nyt, int nzt,
+			float* u1, float* v1, float* w1,
+			float* xx, float* yy, float* zz, float* xy, float* xz, float* yz,
+            float* dcrjx, float* dcrjy, float* dcrjz, float *d1)
+{
+	int i, j, k;
 	int index = 0;
-	int num_i_blocks, num_j_blocks, num_k_blocks;
+	int num_blocks, num_i_blocks, num_j_blocks, num_k_blocks;
 	int *blocking;
+
 	num_i_blocks = ceil((double)nxt/iblock);
 	num_j_blocks = ceil((double)nyt/jblock);
 	num_k_blocks = ceil((double)nzt/kblock);
 	num_blocks = num_i_blocks * num_j_blocks * num_k_blocks;
-	printf ("%d %d %d %d\n", num_i_blocks, num_j_blocks, num_k_blocks, num_blocks);
+
+//	printf ("%d %d %d %d\n", num_i_blocks, num_j_blocks, num_k_blocks, num_blocks);
 	blocking = (int*)malloc(3*num_blocks);
 	if (blocking == NULL) printf ("Allocate blocking failed!\n");
 
@@ -52,7 +62,22 @@ void dvelcx(float DH, float DT,
 				blocking[index++] = j;
 				blocking[index++] = k;
 			}
-	printf ("%d\n", index);
+//	printf ("%d\n", index);
+
+	#pragma omp parallel for num_threads(omp_get_num_threads())
+	schedule(dynamic) 	\
+			firstprivate (nxt, nyt, nzt, num_blocks)	\
+			shared (DH, DT, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, blocking)
+			for (int l = 0; l < num_blocks; l++)
+			{
+				int i_s = blocking[3*l];
+				int j_s = blocking[3*ll+1];
+				int k_s = blocking[3*ll+2];
+				printf ("%d %d %d %d", omp_get_thread_num(), i_s, j_s, k_s);
+				dvelcx(DT, DH, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, i_s, j_s, k_s);
+			}
+}
+
 
 /*	#pragma omp parallel for private (i, j, k, dcrj, d_1, d_2, d_3)
 	for (i = 4; i <= nxt+3; i++)
