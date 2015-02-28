@@ -1,9 +1,13 @@
 #include <stdio.h>
 #include <time.h>
 #include <omp.h>
+#include <math.h>
 #include <stdlib.h>
 
 #define align 0
+#define iblock 16
+#define jblock 16
+#define kblock 16
 #define MIN(a,b) ( (a) < (b) ? (a) : (b) )
 #define MAX(a,b) ( (a) > (b) ? (a) : (b) )
 
@@ -29,7 +33,28 @@ void dvelcx(float DH, float DT,
 	dth = DT/DH;
 
 
-	#pragma omp parallel for private (i, j, k, dcrj, d_1, d_2, d_3)
+	int index = 0;
+	int num_i_blocks, num_j_blocks, num_k_blocks;
+	int *blocking;
+	num_i_blocks = ceil((double)nxt/iblock);
+	num_j_blocks = ceil((double)nyt/jblock);
+	num_k_blocks = ceil((double)nzt/kblock);
+	num_blocks = num_i_blocks * num_j_blocks * num_k_blocks;
+	printf ("%d %d %d %d\n", num_i_blocks, num_j_blocks, num_k_blocks, num_blocks);
+	blocking = (int*)malloc(3*num_blocks);
+	if (blocking == NULL) printf ("Allocate blocking failed!\n");
+
+	for (k = align; k <= nzt+align-1; k += kblock)
+		for (j = 8; j <= nyt-1; j += jblock)
+			for (i = 4; i <= nxt+3; i += iblock)
+			{
+				blocking[index++] = i;
+				blocking[index++] = j;
+				blocking[index++] = k;
+			}
+	printf ("%d\n", index);
+
+/*	#pragma omp parallel for private (i, j, k, dcrj, d_1, d_2, d_3)
 	for (i = 4; i <= nxt+3; i++)
 		for (j = 8; j <= nyt-1; j++)
 			for (k = align; k <= nzt+align-1; k++)
@@ -79,6 +104,7 @@ void dvelcx(float DH, float DT,
 														  + c1*(zz[pos_kp1]-zz[pos]) + c2*(zz[pos_kp2]-zz[pos_km1]))) * dcrj;
 
 						}
+	*/
 	return;
 }
 
