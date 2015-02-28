@@ -4,9 +4,6 @@
 #include <stdlib.h>
 
 #define align 0
-#define iblock 32
-#define jblock 32
-#define kblock 32
 #define MIN(a,b) ( (a) < (b) ? (a) : (b) )
 #define MAX(a,b) ( (a) > (b) ? (a) : (b) )
 
@@ -19,7 +16,6 @@ void dvelcy(float DH, float DT,
 			int s_j, int e_j)
 {
 	int i, j, k;
-	int ii, jj, kk;
 	float c1, c2;
 	float dth, dcrj;
 	float d_1, d_2, d_3;
@@ -36,13 +32,10 @@ void dvelcy(float DH, float DT,
 	dth = DT/DH;
 
 
-	#pragma omp parallel for private (i, j, k, ii, jj, kk, dcrj, d_1, d_2, d_3, j2)
-	for (i = 4; i <= nxt+3; i += iblock)
-		for (k = align; k <= nzt+align-1; k += kblock)
-			for (ii = i; ii <= MIN(i+iblock, nxt+3); ii++)
-				for (jj = s_j, j2 = 0; jj <= e_j; jj++, j2++)
-					#pragma ivdep
-					for (kk = k; kk <= MIN(k+kblock, nzt+align-1); kk++)
+	#pragma omp parallel for private (i, j, k, dcrj, d_1, d_2, d_3, j2)
+	for (i = 4; i <= nxt+3; i++)
+		for (j = s_j, j2 = 0; j <= e_j; j++, j2++)
+			for (k = align; k <= nzt+align-1; k++)
 					{
 						register int pos;
 						register int pos2;
@@ -54,8 +47,8 @@ void dvelcy(float DH, float DT,
 						register int pos_kp1, pos_kp2;
 						register int pos_jk1, pos_ik1, pos_ij1;
 
-						pos		= ii*slice_1+jj*yline_1+kk;
-						pos2	= ii*4*yline_1+j2*yline_1+kk;
+						pos		= i*slice_1+j*yline_1+k;
+						pos2	= i*4*yline_1+j2*yline_1+k;
 						pos_km2 = pos-2;
 						pos_km1 = pos-1;
 						pos_kp1 = pos+1;
@@ -72,7 +65,7 @@ void dvelcy(float DH, float DT,
 						pos_ik1 = pos+slice_1-1;
 						pos_ij1 = pos+slice_1-yline_1;
 
-						dcrj = dcrjx[ii]*dcrjy[jj]*dcrjz[kk];
+						dcrj = dcrjx[i]*dcrjy[j]*dcrjz[k];
 
 						d_1 = 0.25*((d1[pos]+d1[pos_jm1])+(d1[pos_km1]+d1[pos_jk1]));
 						d_2 = 0.25*((d1[pos]+d1[pos_ip1])+(d1[pos_km1]+d1[pos_ik1]));
