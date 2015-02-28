@@ -64,18 +64,15 @@ void dvelcx_omp(float DH, float DT,
 			}
 //	printf ("%d\n", index);
 
-	#pragma omp parallel for num_threads(omp_get_num_threads())
-	schedule(dynamic) 	\
-			firstprivate (nxt, nyt, nzt, num_blocks)	\
-			shared (DH, DT, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, blocking)
-			for (int l = 0; l < num_blocks; l++)
-			{
+	#pragma omp parallel for num_threads(omp_get_num_threads()) schedule(dynamic) firstprivate (nxt, nyt, nzt, num_blocks) shared (DH, DT, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, blocking)
+	for (int l = 0; l < num_blocks; l++)
+	{
 				int i_s = blocking[3*l];
 				int j_s = blocking[3*ll+1];
 				int k_s = blocking[3*ll+2];
 				printf ("%d %d %d %d", omp_get_thread_num(), i_s, j_s, k_s);
 				dvelcx(DT, DH, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, i_s, j_s, k_s);
-			}
+	}
 }
 
 
