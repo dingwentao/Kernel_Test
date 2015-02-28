@@ -50,8 +50,8 @@ void dvelcx_omp(float DH, float DT,
 	num_k_blocks = ceil((double)nzt/kblock);
 	num_blocks = num_i_blocks * num_j_blocks * num_k_blocks;
 
-//	printf ("%d %d %d %d\n", num_i_blocks, num_j_blocks, num_k_blocks, num_blocks);
-	blocking = (int*)malloc(3*num_blocks);
+	printf ("%d %d %d %d\n", num_i_blocks, num_j_blocks, num_k_blocks, num_blocks);
+	blocking = (int*)malloc(3*num_blocks*sizeof(int));
 	if (blocking == NULL) printf ("Allocate blocking failed!\n");
 
 	for (k = align; k <= nzt+align-1; k += kblock)
@@ -62,19 +62,19 @@ void dvelcx_omp(float DH, float DT,
 				blocking[index++] = j;
 				blocking[index++] = k;
 			}
-//	printf ("%d\n", index);
+	printf ("%d\n", index);
 
-	#pragma omp parallel for num_threads(omp_get_num_threads()) schedule(dynamic) firstprivate (nxt, nyt, nzt, num_blocks) shared (DH, DT, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, blocking)
-	for (int l = 0; l < num_blocks; l++)
+	#pragma omp parallel for schedule(dynamic) firstprivate (nxt, nyt, nzt, num_blocks) shared (DH, DT, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, blocking)
+	for (i = 0; i < num_blocks; i++)
 	{
-				int i_s = blocking[3*l];
-				int j_s = blocking[3*ll+1];
-				int k_s = blocking[3*ll+2];
-				printf ("%d %d %d %d", omp_get_thread_num(), i_s, j_s, k_s);
-				dvelcx(DT, DH, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, i_s, j_s, k_s);
+		int i_s = blocking[3*i];
+		int j_s = blocking[3*i+1];
+		int k_s = blocking[3*i+2];
+		printf ("%d %d %d %d\n", omp_get_thread_num(), i_s, j_s, k_s);
+		dvelcx(DT, DH, nxt, nyt, nzt, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, i_s, j_s, k_s);
 	}
-}
 
+	free(blocking);
 
 /*	#pragma omp parallel for private (i, j, k, dcrj, d_1, d_2, d_3)
 	for (i = 4; i <= nxt+3; i++)
@@ -136,9 +136,9 @@ int main()
 	int i, j, k;
 	float *u1, *v1, *w1, *xx, *yy, *zz, *xy, *xz, *yz, *d1, *dcrjx, *dcrjy, *dcrjz;
 
-	nxt = 1024;
-	nyt = 1024;
-	nzt = 128;
+	nxt = 32;
+	nyt = 32;
+	nzt = 32;
 
 	u1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
 	v1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
@@ -175,7 +175,7 @@ int main()
 	double t1;
 
 	clock_gettime(CLOCK_REALTIME, &s1);
-	dvelcx(1.0, 1.0, nxt, nyt, nzt, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1);
+	dvelcx_omp(1.0, 1.0, nxt, nyt, nzt, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1);
 	clock_gettime(CLOCK_REALTIME, &e1);
 
 	t1 = (e1.tv_sec - s1.tv_sec);
