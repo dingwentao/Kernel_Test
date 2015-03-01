@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 #define align 0
-#define iblock 24
+#define iblock 16
 #define jblock 3
 #define kblock 510
 #define MIN(a,b) ( (a) < (b) ? (a) : (b) )
