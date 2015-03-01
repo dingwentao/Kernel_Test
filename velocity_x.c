@@ -5,8 +5,8 @@
 #include <stdlib.h>
 
 #define align 0
-#define iblock 30
-#define jblock 5
+#define iblock 24
+#define jblock 3
 #define kblock 510
 #define MIN(a,b) ( (a) < (b) ? (a) : (b) )
 #define MAX(a,b) ( (a) > (b) ? (a) : (b) )
@@ -17,22 +17,16 @@ void dvelcx(float DH, float DT,
 			float* ptr_xx, float* ptr_yy, float* ptr_zz, float* ptr_xy, float* ptr_xz, float* ptr_yz,
 			float* ptr_dcrjx, float* ptr_dcrjy, float* ptr_dcrjz, float* ptr_d1, int i_s, int j_s, int k_s)
 {
-	float c1, c2;
-	float dth;
-	int   slice_1,  slice_2,  yline_1,  yline_2;
-	int i_e = MIN(i_s+iblock-1, nxt+3);
-	int j_e = MIN(j_s+jblock-1, nyt-1);
-	int k_e = MIN(k_s+kblock-1, nzt+align-1);
+	const float c1 = 9.0/8.0, c2 = -1.0/24.0;
+	const float dth = DT/DH;
+	const int   slice_1 = (nyt+8)*(nzt+2*align);
+	const int 	slice_2 = (nyt+8)*(nzt+2*align)*2;
+	const int	yline_1 = nzt+2*align;
+	const int	yline_2 = (nzt+2*align)*2;
+	const int i_e = MIN(i_s+iblock-1, nxt+3);
+	const int j_e = MIN(j_s+jblock-1, nyt-1);
+	const int k_e = MIN(k_s+kblock-1, nzt+align-1);
 	int ii, jj, kk;
-
-	slice_1  = (nyt+8)*(nzt+2*align);
-	slice_2  = (nyt+8)*(nzt+2*align)*2;
-	yline_1  = nzt+2*align;
-	yline_2  = (nzt+2*align)*2;
-
-	c1 = 9.0/8.0;
-	c2  = -1.0/24.0;
-	dth = DT/DH;
 	
 	for (ii = i_s; ii <= i_e; ii++)
 	{
@@ -55,8 +49,7 @@ void dvelcx(float DH, float DT,
 			#pragma simd
 			for (kk = k_s; kk <= k_e; kk++)
 			{
-				register int dcrj;
-				register int d_1, d_2, d_3;
+				register int dcrj, d_1, d_2, d_3;
 
 				dcrj = dcrjx * dcrjy * ptr_dcrjz[kk];
 				d_1 = 0.25*((d1[kk]+d1[kk-yline_1])+(d1[kk-1]+d1[kk-yline_1-1]));
