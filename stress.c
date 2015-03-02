@@ -18,7 +18,7 @@ void dstrqc(float DH,  float DT,
 		float *ptr_r1, float *ptr_r2, float *ptr_r3, float *ptr_r4, float *ptr_r5, float *ptr_r6,
 		float *ptr_lam,float *ptr_mu, float *ptr_qp, float *ptr_qs, float *ptr_lam_mu,
 		float *ptr_dcrjx, float *ptr_dcrjy, float *ptr_dcrjz,
-		int rankx, int ranky, int e_i, int e_j, int i_s, int j_s, k_s)
+		int rankx, int ranky, int e_i, int e_j, int i_s, int j_s, int k_s)
 {
 	const float c1 = 9.0/8.0, c2 = -1.0/24.0;
 	const float dt1 = 1.0/DT;
@@ -49,6 +49,12 @@ void dstrqc(float DH,  float DT,
 		float *xy = &ptr_xy[ii*slice_1+j_s*yline_1];
 		float *xz = &ptr_xz[ii*slice_1+j_s*yline_1];
 		float *yz = &ptr_yz[ii*slice_1+j_s*yline_1];
+		float *r1 = &ptr_r1[ii*slice_1+j_s*yline_1];
+		float *r2 = &ptr_r2[ii*slice_1+j_s*yline_1];
+		float *r3 = &ptr_r3[ii*slice_1+j_s*yline_1];
+		float *r4 = &ptr_r4[ii*slice_1+j_s*yline_1];
+		float *r5 = &ptr_r5[ii*slice_1+j_s*yline_1];
+		float *r6 = &ptr_r6[ii*slice_1+j_s*yline_1];
 		float *lam = &ptr_lam[ii*slice_1+j_s*yline_1];
 		float *mu = &ptr_mu[ii*slice_1+j_s*yline_1];
 		float *qp = &ptr_qp[ii*slice_1+j_s*yline_1];
@@ -63,8 +69,8 @@ void dstrqc(float DH,  float DT,
 			{
 
 				register float f_vx1 = vx1[kk];
-				register float v_vx2 = vx2[kk];
-				register float dcrj = dcrjx*dcrjy*dcrjz[k];
+				register float f_vx2 = vx2[kk];
+				register float dcrj = dcrjx*dcrjy*ptr_dcrjz[kk];
 
 				register float xl = 8.0/(lam[kk] + lam[kk+slice_1] + lam[kk-yline_1] + lam[kk+slice_1-yline_1]
 							        + lam[kk-1] + lam[kk+slice_1-1] + lam[kk-yline_1-1] + lam[kk+slice_1-yline_1-1]);
@@ -118,7 +124,7 @@ void dstrqc(float DH,  float DT,
 					u1[kk+1] = u1[kk] - (w1[kk] - w1[kk-slice_1]);
 					v1[kk+1] = v1[kk] - (w1[kk+yline_1] - w1[kk]);
 
-					g_i  = nxt*rankx + i - 3; /* uncertainty */
+					g_i  = nxt*rankx + ii - 3; /* uncertainty */
 					if (g_i < NX)
 						vs1	= u1[kk+slice_1] - (w1[kk+slice_1] - w1[kk]);
 					else
@@ -130,7 +136,7 @@ void dstrqc(float DH,  float DT,
 					else
 						vs2 = 0.0;
 
-					w1[kk+1]	= w1[kk-1] - lam_mu[i*(nyt+8)+j]*((vs1 - u1[kk+1])
+					w1[kk+1]	= w1[kk-1] - lam_mu[ii*(nyt+8)+jj]*((vs1 - u1[kk+1])
 							+ (u1[kk+slice_1] - u1[kk])
 							+ (v1[kk+1] - vs2)
 							+ (v1[kk] - v1[kk-yline_1]));
@@ -208,8 +214,10 @@ void dstrqc(float DH,  float DT,
 						}
 				}
 			}
-			return;
 		}
+	}
+	return;
+}
 void dstrqc_omp(float DH,  float DT,
 			int nxt, int nyt, int nzt, int NX,
 			float *vx1, float *vx2,
