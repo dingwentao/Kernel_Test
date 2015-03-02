@@ -250,7 +250,6 @@ void dstrqc_omp(float DH,  float DT,
 				blocking[index++] = k;
 			}
 
-//	#pragma omp parallel for schedule(dynamic) firstprivate (nxt, nyt, nzt, num_blocks) shared (DH, DT, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, blocking)
 	#pragma omp parallel for schedule(dynamic)
 	for (i = 0; i < num_blocks; i++)
 	{
