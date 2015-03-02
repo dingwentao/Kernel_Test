@@ -3,11 +3,214 @@
 #include <omp.h>
 #include <stdlib.h>
 
+#define iblock 32
+#define jblock 32
+#define kblock 32
 #define align 0
 #define MIN(a,b) ( (a) < (b) ? (a) : (b) )
 #define MAX(a,b) ( (a) > (b) ? (a) : (b) )
 
 void dstrqc(float DH,  float DT,
+		int nxt, int nyt, int nzt, int NX,
+		float *ptr_vx1, float *ptr_vx2,
+		float *ptr_u1, float *ptr_v1, float *ptr_w1,
+		float *ptr_xx, float *ptr_yy, float *ptr_zz, float *ptr_xy, float *ptr_xz, float *ptr_yz,
+		float *ptr_r1, float *ptr_r2, float *ptr_r3, float *ptr_r4, float *ptr_r5, float *ptr_r6,
+		float *ptr_lam,float *ptr_mu, float *ptr_qp, float *ptr_qs, float *ptr_lam_mu,
+		float *ptr_dcrjx, float *ptr_dcrjy, float *ptr_dcrjz,
+		int rankx, int ranky, int e_i, int e_j, int i_s, int j_s, k_s)
+{
+	const float c1 = 9.0/8.0, c2 = -1.0/24.0;
+	const float dt1 = 1.0/DT;
+	const float dh1 = 1.0/DH;
+	const float dth = DT/DH;
+	const int   slice_1 = (nyt+8)*(nzt+2*align);
+	const int 	slice_2 = (nyt+8)*(nzt+2*align)*2;
+	const int	yline_1 = nzt+2*align;
+	const int	yline_2 = (nzt+2*align)*2;
+	const int i_e = MIN(i_s+iblock-1, e_i);
+	const int j_e = MIN(j_s+jblock-1, e_j);
+	const int k_e = MIN(k_s+kblock-1, nzt+align-1);
+
+	int ii, jj, kk;
+
+
+	for (ii = i_s; ii <= i_e; ii++)
+	{
+		float dcrjx = ptr_dcrjx[ii];
+		float *vx1 = &ptr_vx1[ii*slice_1+j_s*yline_1];
+		float *vx2 = &ptr_vx2[ii*slice_1+j_s*yline_1];
+		float *u1 = &ptr_u1[ii*slice_1+j_s*yline_1];
+		float *v1 = &ptr_v1[ii*slice_1+j_s*yline_1];
+		float *w1 = &ptr_w1[ii*slice_1+j_s*yline_1];
+		float *xx = &ptr_xx[ii*slice_1+j_s*yline_1];
+		float *yy = &ptr_yy[ii*slice_1+j_s*yline_1];
+		float *zz = &ptr_zz[ii*slice_1+j_s*yline_1];
+		float *xy = &ptr_xy[ii*slice_1+j_s*yline_1];
+		float *xz = &ptr_xz[ii*slice_1+j_s*yline_1];
+		float *yz = &ptr_yz[ii*slice_1+j_s*yline_1];
+		float *lam = &ptr_lam[ii*slice_1+j_s*yline_1];
+		float *mu = &ptr_mu[ii*slice_1+j_s*yline_1];
+		float *qp = &ptr_qp[ii*slice_1+j_s*yline_1];
+		float *qs = &ptr_qs[ii*slice_1+j_s*yline_1];
+		float *lam_mu = &ptr_lam_mu[ii*slice_1+j_s*yline_1];
+		for (jj = j_s; jj <= j_e; jj++)
+		{
+			float dcrjy = ptr_dcrjy[jj];
+			#pragma vector always
+			#pragma simd
+			for (kk = k_s; kk <= k_e; kk++)
+			{
+
+				register float f_vx1 = vx1[kk];
+				register float v_vx2 = vx2[kk];
+				register float dcrj = dcrjx*dcrjy*dcrjz[k];
+
+				register float xl = 8.0/(lam[kk] + lam[kk+slice_1] + lam[kk-yline_1] + lam[kk+slice_1-yline_1]
+							        + lam[kk-1] + lam[kk+slice_1-1] + lam[kk-yline_1-1] + lam[kk+slice_1-yline_1-1]);
+				register float xm = 16.0/(mu[kk] + mu[kk+slice_1] + mu[kk-yline_1] + mu[kk+slice_1-yline_1]
+							         + mu[kk-1] + mu[kk+slice_1-1] + mu[kk-yline_1-1] + mu[kk+slice_1-yline_1-1]);
+
+				register float xmu1 = 2.0/(mu[kk] + mu[kk-1]);
+				register float xmu2 = 2.0/(mu[kk] + mu[kk-yline_1]);
+				register float xmu3 = 2.0/(mu[kk] + mu[kk+slice_1]);
+
+				xl = xl + xm;
+
+				register float qpa = 0.0625*(qp[kk] + qp[kk+slice_1] + qp[kk-yline_1] + qp[kk+slice_1-yline_1]
+					                    + qp[kk-1] + qp[kk+slice_1-1] + qp[kk-yline_1-1] + qp[kk+slice_1-yline_1-1]);
+				register float h 	= 0.0625*(qs[kk] + qs[kk+slice_1] + qs[kk-yline_1] + qs[kk+slice_1-yline_1]
+					                    + qs[kk-1] + qs[kk+slice_1-1] + qs[kk-yline_1-1] + qs[kk+slice_1-yline_1-1]);
+
+				register float h1 = 0.250*(qs[kk] + qs[kk-1]);
+				register float h2 = 0.250*(qs[kk] + qs[kk-yline_1]);
+				register float h3 = 0.250*(qs[kk] + qs[kk+slice_1]);
+				register float vx;
+
+				h     = -xm*h*dh1;
+				h1    = -xmu1*h1*dh1;
+				h2    = -xmu2*h2*dh1;
+				h3    = -xmu3*h3*dh1;
+				qpa   = -qpa*xl*dh1;
+				xm    = xm*dth;
+				xmu1  = xmu1*dth;
+				xmu2  = xmu2*dth;
+				xmu3  = xmu3*dth;
+				xl    = xl*dth;
+				f_vx2 = f_vx2*f_vx1;
+				h     = h*f_vx1;
+				h1    = h1*f_vx1;
+				h2    = h2*f_vx1;
+				h3    = h3*f_vx1;
+				qpa   = qpa*f_vx1;
+
+				xm    = xm+DT*h;
+				xmu1  = xmu1+DT*h1;
+				xmu2  = xmu2+DT*h2;
+				xmu3  = xmu3+DT*h3;
+				vx    = DT*(1+f_vx2);
+
+				register float vs1, vs2, vs3;
+				register int g_i;
+
+				if (k == nzt+align-1)
+				{
+					u1[kk+1] = u1[kk] - (w1[kk] - w1[kk-slice_1]);
+					v1[kk+1] = v1[kk] - (w1[kk+yline_1] - w1[kk]);
+
+					g_i  = nxt*rankx + i - 3; /* uncertainty */
+					if (g_i < NX)
+						vs1	= u1[kk+slice_1] - (w1[kk+slice_1] - w1[kk]);
+					else
+						vs1 = 0.0;
+
+					g_i = nyt*ranky + i - 3; /* uncertainty */
+					if(g_i > 1)
+						vs2	= v1[kk-yline_1] - (w1[kk] - w1[kk-yline_1]);
+					else
+						vs2 = 0.0;
+
+					w1[kk+1]	= w1[kk-1] - lam_mu[i*(nyt+8)+j]*((vs1 - u1[kk+1])
+							+ (u1[kk+slice_1] - u1[kk])
+							+ (v1[kk+1] - vs2)
+							+ (v1[kk] - v1[kk-yline_1]));
+				}
+
+				if (k == nzt+align-2)
+				{
+					u1[kk+2] = u1[kk+1] - (w1[kk+1] - w1[kk-slice_1+1]);
+					v1[kk+2] = v1[kk+1] - (w1[kk+yline_1+1] - w1[kk+1]);
+				}
+
+				vs1 = c1*(u1[kk+slice_1] - u1[kk]) + c2*(u1[kk+slice_2] - u1[kk-slice_1]);
+				vs2 = c1*(v1[kk] - v1[kk-yline_1]) + c2*(v1[kk+yline_1] - v1[kk-yline_2]);
+				vs3 = c1*(w1[kk] - w1[kk-1]) + c2*(w1[kk+1] - w1[kk-2]);
+
+				register float a1, tmp;
+				tmp = xl*(vs1+vs2+vs3);
+				a1  = qpa*(vs1+vs2+vs3);
+				tmp = tmp+DT*a1;
+
+				register float r;
+
+				r = r1[kk];
+				xx[kk] = (xx[kk] + tmp - xm*(vs2+vs3) + vx*r)*dcrj;
+				r1[kk] = f_vx2*r - h*(vs2+vs3) + a1;
+
+				r = r2[kk];
+				yy[kk] = (yy[kk] + tmp - xm*(vs1+vs3) + vx*r)*dcrj;
+				r2[kk] = f_vx2*r - h*(vs1+vs3) + a1;
+
+				r = r3[kk];
+				zz[kk] = (zz[kk] + tmp - xm*(vs1+vs2) + vx*r)*dcrj;
+				r3[kk] = f_vx2*r - h*(vs1+vs2) + a1;
+
+				vs1 = c1*(u1[kk+yline_1] - u1[kk]) + c2*(u1[kk+yline_2] - u1[kk-yline_1]);
+				vs2 = c1*(v1[kk] - v1[kk-slice_1]) + c2*(v1[kk+slice_1] - v1[kk-slice_2]);
+
+				r = r4[kk];
+				xy[kk] = (xy[kk] + xmu1*(vs1+vs2) + vx*r)*dcrj;
+				r4[kk] = f_vx2*r + h1*(vs1+vs2);
+
+				if(k == nzt+align-1)
+				{
+					zz[kk+1] = -zz[kk];
+					xz[kk]   = 0.0;
+					yz[kk]   = 0.0;
+				}
+				else
+				{
+					vs1 = c1*(u1[kk+1] - u1[kk]) + c2*(u1[kk+2] - u1[kk-1]);
+					vs2 = c1*(w1[kk] - w1[kk-slice_1]) + c2*(w1[kk+slice_1] - w1[kk-slice_2]);
+
+					r = r5[kk];
+					xz[kk] = (xz[kk] + xmu2*(vs1+vs2) + vx*r)*dcrj;
+					r5[kk] = f_vx2*r + h2*(vs1+vs2);
+
+					vs1 = c1*(v1[kk+1] - v1[kk]) + c2*(v1[kk+2] - v1[kk-1]);
+					vs2 = c1*(w1[kk+yline_1] - w1[kk]) + c2*(w1[kk+yline_2] - w1[kk-yline_1]);
+
+					r = r6[kk];
+					yz[kk] = (yz[kk] + xmu3*(vs1+vs2) + vx*r)*dcrj;
+					r6[kk] = f_vx2*r + h3*(vs1+vs2);
+
+					if(k == nzt+align-2)
+					{
+						zz[kk+3] = -zz[kk];
+						xz[kk+2] = -xz[kk];
+						yz[kk+2] = -yz[kk];
+					}
+					else
+						if(k == nzt+align-3)
+						{
+							xz[kk+4] = -xz[kk];
+							yz[kk+4] = -yz[kk];
+						}
+				}
+			}
+			return;
+		}
+void dstrqc_omp(float DH,  float DT,
 			int nxt, int nyt, int nzt, int NX,
 			float *vx1, float *vx2,
 			float *u1, float *v1, float *w1,
@@ -18,8 +221,55 @@ void dstrqc(float DH,  float DT,
 			int rankx, int ranky, int s_i, int e_i, int s_j, int e_j)
 {
 	int i, j, k;
-	int g_i;
+	int index = 0;
+	int num_blocks, num_i_blocks, num_j_blocks, num_k_blocks;
+	int *blocking;
+
+	num_i_blocks = ceil((double)nxt/iblock);
+	num_j_blocks = ceil((double)(nyt-8)/jblock);
+	num_k_blocks = ceil((double)nzt/kblock);
+	num_blocks = num_i_blocks * num_j_blocks * num_k_blocks;
+
+
+	blocking = (int*)malloc(3*num_blocks*sizeof(int));
+	if (blocking == NULL) printf ("Allocate blocking failed!\n");
+
+	for (i = s_i; i <= e_i; i += iblock)
+		for (j = s_j; j <= e_j; j += jblock)
+			for (k = align; k <= nzt+align-1; k += kblock)
+			{
+				blocking[index++] = i;
+				blocking[index++] = j;
+				blocking[index++] = k;
+			}
+
+	#pragma omp parallel for schedule(dynamic) firstprivate (nxt, nyt, nzt, num_blocks) shared (DH, DT, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, blocking)
+	for (i = 0; i < num_blocks; i++)
+	{
+		int i_s = blocking[3*i];
+		int j_s = blocking[3*i+1];
+		int k_s = blocking[3*i+2];
+		dstrqc(DH, DT, nxt, nyt, nzt, NX, vx1, vx2, u1, v1, w1, xx, yy, zz, xy, xz, yz, r1, r2, r3, r4, r5, r6, lam, mu, qp, qs, lam_mu, dcrjx, dcrjy, dcrjz,
+			rankx, ranky, e_i, e_j, i_s, j_s, k_s);
+	}
+
+	free(blocking);
+	return;
+}
+
+void dstrqc_omp_2(float DH,  float DT,
+				int nxt, int nyt, int nzt, int NX,
+				float *vx1, float *vx2,
+				float *u1, float *v1, float *w1,
+				float *xx, float *yy, float *zz, float *xy, float *xz, float *yz,
+				float* r1, float* r2, float* r3, float* r4, float* r5, float* r6,
+				float* lam,float* mu, float* qp, float* qs, float* lam_mu,
+				float* dcrjx, float* dcrjy, float* dcrjz,
+				int rankx, int ranky, int s_i, int e_i, int s_j, int e_j)
+{
+	int i, j, k;
 	int slice_1,  slice_2,  yline_1,  yline_2;
+	int g_i;
 	float dt1, dh1, dth, c1, c2;
 	float f_vx1, f_vx2;
 	float xl, xm;
@@ -45,7 +295,7 @@ void dstrqc(float DH,  float DT,
 	for (i = s_i; i <= e_i; i++)
 		for (j = s_j; j <= e_j; j++)
 			for (k = align; k <= align+nzt-1; k++)
-			{
+						{
 							register int pos;
 							register int pos_ip1, pos_ip2;
 							register int pos_im1, pos_im2;
@@ -56,12 +306,12 @@ void dstrqc(float DH,  float DT,
 							register int pos_ik1, pos_jk1, pos_ij1, pos_ijk1;
 
 							pos = i*slice_1+j*yline_1+k;
-							pos_km1 = pos-1;
 							pos_km2 = pos-2;
+							pos_km1 = pos-1;
 							pos_kp1 = pos+1;
 							pos_kp2 = pos+2;
-							pos_jm2 = pos-yline_2;
 							pos_jm1 = pos-yline_1;
+							pos_jm2 = pos-yline_2;
 							pos_jp1 = pos+yline_1;
 							pos_jp2 = pos+yline_2;
 							pos_im1 = pos-slice_1;
@@ -126,7 +376,8 @@ void dstrqc(float DH,  float DT,
 			                	v1[pos_kp1] = v1[pos] - (w1[pos_jp1] - w1[pos]);
 
 			                	g_i  = nxt*rankx + i - 3; /* uncertainty */
-								if (g_i < NX)
+
+			                	if (g_i < NX)
 			                		vs1	= u1[pos_ip1] - (w1[pos_ip1] - w1[pos]);
 			                	else
 			                		vs1 = 0.0;
@@ -146,7 +397,7 @@ void dstrqc(float DH,  float DT,
 			                if (k == nzt+align-2)
 			                {
 			                	 u1[pos_kp2] = u1[pos_kp1] - (w1[pos_kp1] - w1[pos_im1+1]);
-								 v1[pos_kp2] = v1[pos_kp1] - (w1[pos_jp1+1] - w1[pos_kp1]);
+			                	 v1[pos_kp2] = v1[pos_kp1] - (w1[pos_jp1+1] - w1[pos_kp1]);
 			                }
 
 			                vs1 = c1*(u1[pos_ip1] - u1[pos]) + c2*(u1[pos_ip2] - u1[pos_im1]);
@@ -159,7 +410,7 @@ void dstrqc(float DH,  float DT,
 
 			                register float r;
 
-							r = r1[pos];
+			                r = r1[pos];
 			                xx[pos] = (xx[pos] + tmp - xm*(vs2+vs3) + vx*r)*dcrj;
 			                r1[pos] = f_vx2*r - h*(vs2+vs3) + a1;
 
@@ -213,7 +464,7 @@ void dstrqc(float DH,  float DT,
 			                			yz[pos+4] = -yz[pos];
 			                		}
 			                }
-			}
+						}
 
 	return;
 }
@@ -226,10 +477,10 @@ int main()
 	float *u1, *v1, *w1, *xx, *yy, *zz, *xy, *xz, *yz, *dcrjx, *dcrjy, *dcrjz;
 	float *vx1, *vx2, *r1, *r2, *r3, *r4, *r5, *r6, *lam, *mu, *qp, *qs, *lam_mu;
 
-	nxt = 2048;
-	nyt = 2048;
+	nxt = 512;
+	nyt = 512;
 	nzt = 128;
-	NX = 2048;
+	NX = 512;
 
 	u1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
 	v1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
@@ -292,7 +543,7 @@ int main()
 	double t3;
 
 	clock_gettime(CLOCK_REALTIME, &s3);
-	dstrqc(1.0, 1.0, nxt, nyt, nzt, NX, vx1, vx2, u1, v1, w1, xx, yy, zz, xy, xz, yz, r1, r2, r3, r4, r5, r6, lam, mu, qp, qs, lam_mu, dcrjx, dcrjy,dcrjz, 0, 0, 4, nxt+3, 4, nyt+3);
+	dstrqc_omp(1.0, 1.0, nxt, nyt, nzt, NX, vx1, vx2, u1, v1, w1, xx, yy, zz, xy, xz, yz, r1, r2, r3, r4, r5, r6, lam, mu, qp, qs, lam_mu, dcrjx, dcrjy,dcrjz, 0, 0, 4, nxt+3, 4, nyt+3);
 	clock_gettime(CLOCK_REALTIME, &e3);
 
 	t3 = (e3.tv_sec - s3.tv_sec);
