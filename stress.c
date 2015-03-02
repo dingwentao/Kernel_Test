@@ -59,7 +59,6 @@ void dstrqc(float DH,  float DT,
 		float *mu = &ptr_mu[ii*slice_1+j_s*yline_1];
 		float *qp = &ptr_qp[ii*slice_1+j_s*yline_1];
 		float *qs = &ptr_qs[ii*slice_1+j_s*yline_1];
-		float *lam_mu = &ptr_lam_mu[ii*slice_1+j_s*yline_1];
 		for (jj = j_s; jj <= j_e; jj++)
 		{
 			float dcrjy = ptr_dcrjy[jj];
@@ -119,7 +118,7 @@ void dstrqc(float DH,  float DT,
 				register float vs1, vs2, vs3;
 				register int g_i;
 
-				if (k == nzt+align-1)
+				if (kk == nzt+align-1)
 				{
 					u1[kk+1] = u1[kk] - (w1[kk] - w1[kk-slice_1]);
 					v1[kk+1] = v1[kk] - (w1[kk+yline_1] - w1[kk]);
@@ -130,19 +129,19 @@ void dstrqc(float DH,  float DT,
 					else
 						vs1 = 0.0;
 
-					g_i = nyt*ranky + i - 3; /* uncertainty */
+					g_i = nyt*ranky + ii - 3; /* uncertainty */
 					if(g_i > 1)
 						vs2	= v1[kk-yline_1] - (w1[kk] - w1[kk-yline_1]);
 					else
 						vs2 = 0.0;
 
-					w1[kk+1]	= w1[kk-1] - lam_mu[ii*(nyt+8)+jj]*((vs1 - u1[kk+1])
+					w1[kk+1]	= w1[kk-1] - ptr_lam_mu[ii*(nyt+8)+jj]*((vs1 - u1[kk+1])
 							+ (u1[kk+slice_1] - u1[kk])
 							+ (v1[kk+1] - vs2)
 							+ (v1[kk] - v1[kk-yline_1]));
 				}
 
-				if (k == nzt+align-2)
+				if (kk == nzt+align-2)
 				{
 					u1[kk+2] = u1[kk+1] - (w1[kk+1] - w1[kk-slice_1+1]);
 					v1[kk+2] = v1[kk+1] - (w1[kk+yline_1+1] - w1[kk+1]);
@@ -178,7 +177,7 @@ void dstrqc(float DH,  float DT,
 				xy[kk] = (xy[kk] + xmu1*(vs1+vs2) + vx*r)*dcrj;
 				r4[kk] = f_vx2*r + h1*(vs1+vs2);
 
-				if(k == nzt+align-1)
+				if(kk == nzt+align-1)
 				{
 					zz[kk+1] = -zz[kk];
 					xz[kk]   = 0.0;
@@ -207,7 +206,7 @@ void dstrqc(float DH,  float DT,
 						yz[kk+2] = -yz[kk];
 					}
 					else
-						if(k == nzt+align-3)
+						if(kk == nzt+align-3)
 						{
 							xz[kk+4] = -xz[kk];
 							yz[kk+4] = -yz[kk];
@@ -234,7 +233,7 @@ void dstrqc_omp(float DH,  float DT,
 	int *blocking;
 
 	num_i_blocks = ceil((double)nxt/iblock);
-	num_j_blocks = ceil((double)(nyt-8)/jblock);
+	num_j_blocks = ceil((double)nyt/jblock);
 	num_k_blocks = ceil((double)nzt/kblock);
 	num_blocks = num_i_blocks * num_j_blocks * num_k_blocks;
 
@@ -251,7 +250,8 @@ void dstrqc_omp(float DH,  float DT,
 				blocking[index++] = k;
 			}
 
-	#pragma omp parallel for schedule(dynamic) firstprivate (nxt, nyt, nzt, num_blocks) shared (DH, DT, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, blocking)
+//	#pragma omp parallel for schedule(dynamic) firstprivate (nxt, nyt, nzt, num_blocks) shared (DH, DT, u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d1, blocking)
+	#pragma omp parallel for schedule(dynamic)
 	for (i = 0; i < num_blocks; i++)
 	{
 		int i_s = blocking[3*i];
@@ -477,6 +477,23 @@ void dstrqc_omp_2(float DH,  float DT,
 	return;
 }
 
+void verification(int nxt, int nyt, int nzt, float *p1, float *p2)
+{
+	int i, j, k;
+	float diff = 0.0, m_p1 = 0.0, m_p2 = 0.0;
+	int pos;
+	for (i = 4; i <= nxt+3; i++)
+		for (j = 8; j <= nyt-1; j++)
+			for (k = align; k <= nzt+align-1; k++)
+			{
+				pos = i*(nyt+8)*(nzt+2*align) + j*(nzt+2*align) + k;
+				m_p1 += p1[pos]*p1[pos];
+				m_p2 += p2[pos]*p2[pos];
+				diff += (p1[pos]-p2[pos])*(p1[pos]-p2[pos]);
+			}
+	printf ("%f\n", diff/(m_p1*m_p2));
+}
+
 int main()
 {
 	int nxt, nyt, nzt;
@@ -494,12 +511,19 @@ int main()
 	v1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
 	w1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
 
-	xx = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
-	yy = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
-	zz = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
-	xy = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
-	xz = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
-	yz = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
+	xx_1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
+	yy_1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
+	zz_1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
+	xy_1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
+	xz_1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
+	yz_1 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
+
+	xx_2 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
+	yy_2 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
+	zz_2 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
+	xy_2 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
+	xz_2 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
+	yz_2 = (float*) malloc ((nxt+8)*(nyt+8)*(nzt+2*align)*sizeof(float));
 
 	dcrjx = (float*) malloc ((nxt+8)*sizeof(float));
 	dcrjy = (float*) malloc ((nyt+8)*sizeof(float));
@@ -524,12 +548,18 @@ int main()
 	if (u1 == NULL) printf ("Allocate u1 failed!\n");
 	if (v1 == NULL) printf ("Allocate v1 failed!\n");
 	if (w1 == NULL) printf ("Allocate w1 failed!\n");
-	if (xx == NULL) printf ("Allocate xx failed!\n");
-	if (yy == NULL) printf ("Allocate yy failed!\n");
-	if (zz == NULL) printf ("Allocate zz failed!\n");
-	if (xy == NULL) printf ("Allocate xy failed!\n");
-	if (xz == NULL) printf ("Allocate xz failed!\n");
-	if (yz == NULL) printf ("Allocate uz failed!\n");
+	if (xx_1 == NULL) printf ("Allocate xx_1 failed!\n");
+	if (yy_1 == NULL) printf ("Allocate yy_1 failed!\n");
+	if (zz_1 == NULL) printf ("Allocate zz_1 failed!\n");
+	if (xy_1 == NULL) printf ("Allocate xy_1 failed!\n");
+	if (xz_1 == NULL) printf ("Allocate xz_1 failed!\n");
+	if (yz_1 == NULL) printf ("Allocate zz_1 failed!\n");
+	if (xx_2 == NULL) printf ("Allocate xx_2 failed!\n");
+	if (yy_2 == NULL) printf ("Allocate yy_2 failed!\n");
+	if (zz_2 == NULL) printf ("Allocate zz_2 failed!\n");
+	if (xy_2 == NULL) printf ("Allocate xy_2 failed!\n");
+	if (xz_2 == NULL) printf ("Allocate xz_2 failed!\n");
+	if (yz_2 == NULL) printf ("Allocate zz_2 failed!\n");
 	if (dcrjx == NULL) printf ("Allocate dcrjx failed!\n");
 	if (dcrjy == NULL) printf ("Allocate dcrjy failed!\n");
 	if (dcrjz == NULL) printf ("Allocate dcrjz failed!\n");
@@ -547,16 +577,63 @@ int main()
 	if (qs == NULL) printf ("Allocate qs failed!\n");
 	if (lam_mu == NULL) printf ("Allocate lam_mu failed!\n");
 
-	struct timespec s3, e3;
-	double t3;
+	for (i = 0; i < nxt+8; i++) dcrjx[i] = i;
+	for (j = 0; j < nyt+8; j++) dcrjy[j] = j;
+	for (k = align; k < nzt+align; k++) dcrjz[k] = k;
+
+	for (i = 0; i < nxt+8; i++)
+	  for (j = 0; j < nyt+8; j++)
+		for (k = align; k < nzt+align; k++)
+		{
+			int pos = i*(nyt+8)*(nzt+2*align) + j*(nzt+2*align) + k;
+			u1[pos] = pos;
+			v1[pos] = pos;
+			w1[pos] = pos;
+			xx_1[pos] = pos;
+			yy_1[pos] = pos;
+			zz_1[pos] = pos;
+			xy_1[pos] = pos;
+			xz_1[pos] = pos;
+			yz_1[pos] = pos;
+			xx_2[pos] = pos;
+			yy_2[pos] = pos;
+			zz_2[pos] = pos;
+			xy_2[pos] = pos;
+			xz_2[pos] = pos;
+			yz_2[pos] = pos;
+			lam[pos] = pos;
+			mu[pos] = pos;
+			qp[pos] = pos;
+			qs[pos] = pos;
+		}
+
+	for (i = 0; i < nxt+8; i++)
+		for (j = 0; j < nyt+8; j++)
+		{
+			int pos = i*(nyt+8) + j;
+			lam_mu[pos] = pos;
+		}
+
+	struct timespec s3, e3, s4, e4;
+	double t3, t4;
 
 	clock_gettime(CLOCK_REALTIME, &s3);
-	dstrqc_omp(1.0, 1.0, nxt, nyt, nzt, NX, vx1, vx2, u1, v1, w1, xx, yy, zz, xy, xz, yz, r1, r2, r3, r4, r5, r6, lam, mu, qp, qs, lam_mu, dcrjx, dcrjy,dcrjz, 0, 0, 4, nxt+3, 4, nyt+3);
+	dstrqc_omp(1.0, 1.0, nxt, nyt, nzt, NX, vx1, vx2, u1, v1, w1, xx_1, yy_1, zz_1, xy_1, xz_1, yz_1, r1, r2, r3, r4, r5, r6, lam, mu, qp, qs, lam_mu, dcrjx, dcrjy,dcrjz, 0, 0, 4, nxt+3, 4, nyt+3);
+	clock_gettime(CLOCK_REALTIME, &e3);
+
+	clock_gettime(CLOCK_REALTIME, &s3);
+	dstrqc_omp_2(1.0, 1.0, nxt, nyt, nzt, NX, vx1, vx2, u1, v1, w1, xx_2, yy_2, zz_2, xy_2, xz_2, yz_2, r1, r2, r3, r4, r5, r6, lam, mu, qp, qs, lam_mu, dcrjx, dcrjy,dcrjz, 0, 0, 4, nxt+3, 4, nyt+3);
 	clock_gettime(CLOCK_REALTIME, &e3);
 
 	t3 = (e3.tv_sec - s3.tv_sec);
 	t3 += (e3.tv_nsec - s3.tv_nsec) / 1000000000.0;
 	printf ("%f\n", t3);
+
+	t4 = (e4.tv_sec - s4.tv_sec);
+	t4 += (e4.tv_nsec - s4.tv_nsec) / 1000000000.0;
+	printf ("%f\n", t4);
+
+	verfication(nxt, nyt, nzt, xx_1, xx_2);
 
 	return 0;
 }

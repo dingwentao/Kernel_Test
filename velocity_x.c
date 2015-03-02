@@ -49,7 +49,7 @@ void dvelcx(float DH, float DT,
 			#pragma simd
 			for (kk = k_s; kk <= k_e; kk++)
 			{
-				register int dcrj, d_1, d_2, d_3;
+				register float dcrj, d_1, d_2, d_3;
 
 				dcrj = dcrjx * dcrjy * ptr_dcrjz[kk];
 				d_1 = 0.25*((d1[kk]+d1[kk-yline_1])+(d1[kk-1]+d1[kk-yline_1-1]));
